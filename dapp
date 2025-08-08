@@ -1,0 +1,123 @@
+#!/usr/bin/env ruby
+
+require 'json'
+require 'open3'
+
+STDOUT.sync = true
+
+def usage
+  puts "dapp <command> [args]\n\nCommands:\n  new <project-env>                    Create project and app (git url inferred)\n  list                                 List apps as <project>-<env>\n  logs <project-env> [-- ...args]      Stream logs for app\n  exec <project-env> [-- ...args]      Exec into app (args passed to nctl)\n  stats <project-env>                  Show app stats\n  config <project-env>                 Show app config (yaml)\n  config:edit <project-env>            Edit app config\n  hosts <project-env>                  Print app hosts\n\nGlobal flags before command:\n  --org-prefix <prefix>                Default: renuo\n  --dry-run                            Print commands without executing\n\nExamples:\n  dapp new fizzbuzz-main\n  dapp logs fizzbuzz-main\n  dapp exec fizzbuzz-main -- -c 'echo hi'\n"
+  exit 1
+end
+
+class AppRef
+  attr_reader :project_short, :environment, :org_prefix
+  def initialize(project_env, org_prefix)
+    parts = project_env.split('-')
+    raise "invalid <project-env>: #{project_env}" if parts.size < 2
+    @environment = parts.pop
+    @project_short = parts.join('-')
+    @org_prefix = org_prefix
+  end
+  def project_full
+    [org_prefix, project_short].join('-')
+  end
+  def app_name
+    environment
+  end
+  def git_url
+    "git@github.com:#{org_prefix}/#{project_short}.git"
+  end
+end
+
+class Runner
+  def initialize(dry_run: false)
+    @dry_run = dry_run
+  end
+  def run(cmd)
+    puts "> #{cmd}"
+    return true if @dry_run
+    system(cmd)
+  end
+  def capture(cmd)
+    puts "> #{cmd}"
+    return ["", "", 0] if @dry_run
+    stdout, stderr, status = Open3.capture3(cmd)
+    [stdout, stderr, status.exitstatus]
+  end
+end
+
+org_prefix = 'renuo'
+args = ARGV.dup
+if args.include?('--org-prefix')
+  idx = args.index('--org-prefix')
+  usage if idx.nil? || args[idx+1].nil?
+  org_prefix = args[idx+1]
+  args.slice!(idx, 2)
+end
+
+dry_run = false
+if args.include?('--dry-run')
+  idx = args.index('--dry-run')
+  dry_run = true
+  args.slice!(idx, 1)
+end
+
+usage if args.empty?
+
+cmd = args.shift
+runner = Runner.new(dry_run: dry_run)
+
+case cmd
+when 'new'
+  usage if args.empty?
+  ref = AppRef.new(args.shift, org_prefix)
+  stdout, _stderr, _code = runner.capture("nctl get projects -o json")
+  existing = []
+  begin
+    json = JSON.parse(stdout)
+    if json.is_a?(Array)
+      existing = json.map { |p| p.dig('metadata', 'name') }.compact
+    elsif json.is_a?(Hash) && json['items'].is_a?(Array)
+      existing = json['items'].map { |p| p.dig('metadata', 'name') }.compact
+    end
+  rescue JSON::ParserError
+    existing = []
+  end
+  unless existing.include?(ref.project_full)
+    ok = runner.run("nctl create project #{ref.project_full}")
+    exit 1 unless ok
+  end
+  ok = runner.run("nctl create app #{ref.app_name} --project #{ref.project_full} --git-url #{ref.git_url} --git-revision \"#{ref.environment}\" --size=mini")
+  exit 1 unless ok
+when 'list'
+  runner.run("nctl get apps -A -o json | jq -r '.[] | (.metadata.namespace + \"-\" + .metadata.name | gsub(\"#{org_prefix}-\"; \"\"))'")
+when 'logs'
+  usage if args.empty?
+  ref = AppRef.new(args.shift, org_prefix)
+  extra = args.empty? ? '' : ' ' + args.join(' ')
+  runner.run("nctl logs app #{ref.app_name} --project #{ref.project_full}#{extra}")
+when 'exec'
+  usage if args.empty?
+  ref = AppRef.new(args.shift, org_prefix)
+  extra = args.empty? ? '' : ' ' + args.join(' ')
+  runner.run("nctl exec app #{ref.app_name} --project #{ref.project_full}#{extra}")
+when 'stats'
+  usage if args.empty?
+  ref = AppRef.new(args.shift, org_prefix)
+  runner.run("nctl get app #{ref.app_name} --project #{ref.project_full} -o stats")
+when 'config'
+  usage if args.empty?
+  ref = AppRef.new(args.shift, org_prefix)
+  runner.run("nctl get app #{ref.app_name} --project #{ref.project_full} -o yaml")
+when 'config:edit'
+  usage if args.empty?
+  ref = AppRef.new(args.shift, org_prefix)
+  runner.run("nctl edit app #{ref.app_name} --project #{ref.project_full}")
+when 'hosts'
+  usage if args.empty?
+  ref = AppRef.new(args.shift, org_prefix)
+  runner.run("nctl get app #{ref.app_name} --project #{ref.project_full} -o json | jq -r '.status.atProvider.hosts | map(.name) | .[]'")
+else
+  usage
+end
