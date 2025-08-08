@@ -6,7 +6,32 @@ require 'open3'
 STDOUT.sync = true
 
 def usage
-  puts "dapp <command> [args]\n\nCommands:\n  new <project-env>                    Create project and app (git url inferred)\n  list                                 List apps as <project>-<env>\n  logs <project-env> [-- ...args]      Stream logs for app\n  exec <project-env> [-- ...args]      Exec into app (args passed to nctl)\n  stats <project-env>                  Show app stats\n  config <project-env>                 Show app config (yaml)\n  config:edit <project-env>            Edit app config\n  hosts <project-env>                  Print app hosts\n\nGlobal flags before command:\n  --org-prefix <prefix>                Default: renuo\n  --dry-run                            Print commands without executing\n\nExamples:\n  dapp new fizzbuzz-main\n  dapp logs fizzbuzz-main\n  dapp exec fizzbuzz-main -- -c 'echo hi'\n"
+  message = <<~USAGE
+    dapp (deplo.io app CLI)
+
+    Usage:
+      dapp <command> [args]
+
+    Commands:
+      new <project-env>                    Create project and app (git url inferred)
+      list                                 List apps as <project>-<env>
+      logs <project-env> [-- ...args]      Stream logs for app
+      exec <project-env> [-- ...args]      Exec into app (args passed to nctl)
+      stats <project-env>                  Show app stats
+      config <project-env>                 Show app config (yaml)
+      config:edit <project-env>            Edit app config
+      hosts <project-env>                  Print app hosts
+
+    Global flags (must appear before the command):
+      --org-prefix <prefix>                Default: renuo
+      --dry-run                            Print commands without executing
+
+    Examples:
+      dapp new fizzbuzz-main
+      dapp logs fizzbuzz-main
+      dapp exec fizzbuzz-main -- -c 'echo hi'
+  USAGE
+  puts message
   exit 1
 end
 
