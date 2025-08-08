@@ -2,12 +2,14 @@
 #
 # Install dapp (deplo.io app CLI)
 #
-# One-liners:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/curl_setup)
-#   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/curl_setup | bash
+# Curlable one-liners (Gist-hosted):
+#   bash <(curl -fsSL https://gist.githubusercontent.com/CuddlyBunion341/ef3bd0e42148a2b8cf12b18d3fdeeaa7/raw/curl_setup)
+#   curl -fsSL https://gist.githubusercontent.com/CuddlyBunion341/ef3bd0e42148a2b8cf12b18d3fdeeaa7/raw/curl_setup | bash
+#   # If you prefer, with Bun's shell:
+#   curl -fsSL https://gist.githubusercontent.com/CuddlyBunion341/ef3bd0e42148a2b8cf12b18d3fdeeaa7/raw/curl_setup | bun sh
 #
 # Optional env overrides:
-#   RAW_BASE=https://raw.githubusercontent.com/<owner>/<repo>/v1.0.0 bash <(curl -fsSL .../curl_setup)
+#   RAW_BASE=https://gist.githubusercontent.com/CuddlyBunion341/ef3bd0e42148a2b8cf12b18d3fdeeaa7/raw bash <(curl -fsSL .../curl_setup)
 #   INSTALL_DIR=$HOME/.local/bin bash <(curl -fsSL .../curl_setup)
 #   APP_NAME=dapp bash <(curl -fsSL .../curl_setup)
 #
@@ -15,8 +17,8 @@ set -euo pipefail
 
 APP_NAME=${APP_NAME:-dapp}
 INSTALL_DIR=${INSTALL_DIR:-"${HOME}/.local/bin"}
-# RAW_BASE should point to the directory that contains the raw files in GitHub, e.g. .../<owner>/<repo>/main
-RAW_BASE=${RAW_BASE:-"https://raw.githubusercontent.com/<owner>/<repo>/main"}
+# RAW_BASE should point to the directory that contains raw files; for Gist, use the /raw base
+RAW_BASE=${RAW_BASE:-"https://gist.githubusercontent.com/CuddlyBunion341/ef3bd0e42148a2b8cf12b18d3fdeeaa7/raw"}
 DAPP_URL="${RAW_BASE}/dapp"
 
 COLOR_RESET='\033[0m'
@@ -49,7 +51,7 @@ main() {
   info "Installing ${APP_NAME} (deplo.io app CLI)"
 
   if [[ "$RAW_BASE" == *"<owner>"* || "$RAW_BASE" == *"<repo>"* ]]; then
-    warn "RAW_BASE uses placeholder <owner>/<repo>. Set RAW_BASE to your repository raw base if this fails."
+    warn "RAW_BASE looks like a placeholder. Set RAW_BASE to a valid raw base (e.g. your Gist /raw URL)."
   fi
 
   mkdir -p "$INSTALL_DIR"
