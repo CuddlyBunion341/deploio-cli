@@ -5,11 +5,23 @@ require 'open3'
 
 STDOUT.sync = true
 
-def usage
+def extract_global_flags(argv, default_org_prefix: 'renuo')
+  args = argv.dup
+  org_prefix = default_org_prefix
+  if (idx = args.index('--org-prefix')) && args[idx+1]
+    org_prefix = args[idx+1]
+    args.slice!(idx, 2)
+  end
+  dry_run = args.delete('--dry-run') ? true : false
+  [args, org_prefix, dry_run]
+end
+
+def usage(exit_code = 1)
   message = <<~USAGE
     dapp (deplo.io app CLI)
 
     Usage:
+      dapp [--org-prefix <prefix>] [--dry-run] [--help]
       dapp <command> [args]
 
     Commands:
@@ -25,6 +37,12 @@ def usage
     Global flags (must appear before the command):
       --org-prefix <prefix>                Default: renuo
       --dry-run                            Print commands without executing
+      --help                               Show nctl help for a command. If a
+                                           command is provided (e.g. "dapp logs --help"),
+                                           shows help for the underlying nctl
+                                           command and bypasses other flags. If no
+                                           command is provided, shows top-level
+                                           nctl help.
 
     Examples:
       dapp new fizzbuzz-main
@@ -32,7 +50,7 @@ def usage
       dapp exec fizzbuzz-main -- -c 'echo hi'
   USAGE
   puts message
-  exit 1
+  exit exit_code
 end
 
 class AppRef
@@ -72,77 +90,119 @@ class Runner
   end
 end
 
-org_prefix = 'renuo'
-args = ARGV.dup
-if args.include?('--org-prefix')
-  idx = args.index('--org-prefix')
-  usage if idx.nil? || args[idx+1].nil?
-  org_prefix = args[idx+1]
-  args.slice!(idx, 2)
+def nctl_app_cmd(action, ref)
+  "nctl #{action} app #{ref.app_name} --project #{ref.project_full}"
 end
 
-dry_run = false
-if args.include?('--dry-run')
-  idx = args.index('--dry-run')
-  dry_run = true
-  args.slice!(idx, 1)
+COMMANDS = {
+  'new' => {
+    help: 'nctl create app --help',
+    run: ->(args, org_prefix, runner) {
+      raise 'missing <project-env>' if args.empty?
+      ref = AppRef.new(args.shift, org_prefix)
+      stdout, _stderr, _code = runner.capture("nctl get projects -o json")
+      existing = []
+      begin
+        json = JSON.parse(stdout)
+        if json.is_a?(Array)
+          existing = json.map { |p| p.dig('metadata', 'name') }.compact
+        elsif json.is_a?(Hash) && json['items'].is_a?(Array)
+          existing = json['items'].map { |p| p.dig('metadata', 'name') }.compact
+        end
+      rescue JSON::ParserError
+        existing = []
+      end
+      unless existing.include?(ref.project_full)
+        ok = runner.run("nctl create project #{ref.project_full}")
+        exit 1 unless ok
+      end
+      ok = runner.run("nctl create app #{ref.app_name} --project #{ref.project_full} --git-url #{ref.git_url} --git-revision \"#{ref.environment}\" --size=mini")
+      exit 1 unless ok
+    }
+  },
+  'list' => {
+    help: 'nctl get apps --help',
+    run: ->(_args, org_prefix, runner) {
+      runner.run("nctl get apps -A -o json | jq -r '.[] | (.metadata.namespace + "-" + .metadata.name | gsub(\"#{org_prefix}-\"; \"\"))'")
+    }
+  },
+  'logs' => {
+    help: 'nctl logs app --help',
+    run: ->(args, org_prefix, runner) {
+      raise 'missing <project-env>' if args.empty?
+      ref = AppRef.new(args.shift, org_prefix)
+      extra = args.empty? ? '' : ' ' + args.join(' ')
+      runner.run(nctl_app_cmd('logs', ref) + extra)
+    }
+  },
+  'exec' => {
+    help: 'nctl exec app --help',
+    run: ->(args, org_prefix, runner) {
+      raise 'missing <project-env>' if args.empty?
+      ref = AppRef.new(args.shift, org_prefix)
+      extra = args.empty? ? '' : ' ' + args.join(' ')
+      runner.run(nctl_app_cmd('exec', ref) + extra)
+    }
+  },
+  'stats' => {
+    help: 'nctl get app --help',
+    run: ->(args, org_prefix, runner) {
+      raise 'missing <project-env>' if args.empty?
+      ref = AppRef.new(args.shift, org_prefix)
+      runner.run(nctl_app_cmd('get', ref) + ' -o stats')
+    }
+  },
+  'config' => {
+    help: 'nctl get app --help',
+    run: ->(args, org_prefix, runner) {
+      raise 'missing <project-env>' if args.empty?
+      ref = AppRef.new(args.shift, org_prefix)
+      runner.run(nctl_app_cmd('get', ref) + ' -o yaml')
+    }
+  },
+  'config:edit' => {
+    help: 'nctl edit app --help',
+    run: ->(args, org_prefix, runner) {
+      raise 'missing <project-env>' if args.empty?
+      ref = AppRef.new(args.shift, org_prefix)
+      runner.run(nctl_app_cmd('edit', ref))
+    }
+  },
+  'hosts' => {
+    help: 'nctl get app --help',
+    run: ->(args, org_prefix, runner) {
+      raise 'missing <project-env>' if args.empty?
+      ref = AppRef.new(args.shift, org_prefix)
+      runner.run(nctl_app_cmd('get', ref) + " -o json | jq -r '.status.atProvider.hosts | map(.name) | .[]'")
+    }
+  }
+}.freeze
+
+if ARGV.include?("--help")
+  args_ng, _org, dry_for_help = extract_global_flags(ARGV)
+  args_ng.delete('--help')
+  dapp_cmd = args_ng[0]
+  if dapp_cmd.nil?
+    usage(0)
+  elsif COMMANDS[dapp_cmd]
+    help_cmd = COMMANDS[dapp_cmd][:help]
+    if dry_for_help
+      puts "> #{help_cmd}"
+      exit 0
+    else
+      exec(help_cmd)
+    end
+  else
+    usage
+  end
 end
+
+args, org_prefix, dry_run = extract_global_flags(ARGV)
 
 usage if args.empty?
 
 cmd = args.shift
 runner = Runner.new(dry_run: dry_run)
-
-case cmd
-when 'new'
-  usage if args.empty?
-  ref = AppRef.new(args.shift, org_prefix)
-  stdout, _stderr, _code = runner.capture("nctl get projects -o json")
-  existing = []
-  begin
-    json = JSON.parse(stdout)
-    if json.is_a?(Array)
-      existing = json.map { |p| p.dig('metadata', 'name') }.compact
-    elsif json.is_a?(Hash) && json['items'].is_a?(Array)
-      existing = json['items'].map { |p| p.dig('metadata', 'name') }.compact
-    end
-  rescue JSON::ParserError
-    existing = []
-  end
-  unless existing.include?(ref.project_full)
-    ok = runner.run("nctl create project #{ref.project_full}")
-    exit 1 unless ok
-  end
-  ok = runner.run("nctl create app #{ref.app_name} --project #{ref.project_full} --git-url #{ref.git_url} --git-revision \"#{ref.environment}\" --size=mini")
-  exit 1 unless ok
-when 'list'
-  runner.run("nctl get apps -A -o json | jq -r '.[] | (.metadata.namespace + \"-\" + .metadata.name | gsub(\"#{org_prefix}-\"; \"\"))'")
-when 'logs'
-  usage if args.empty?
-  ref = AppRef.new(args.shift, org_prefix)
-  extra = args.empty? ? '' : ' ' + args.join(' ')
-  runner.run("nctl logs app #{ref.app_name} --project #{ref.project_full}#{extra}")
-when 'exec'
-  usage if args.empty?
-  ref = AppRef.new(args.shift, org_prefix)
-  extra = args.empty? ? '' : ' ' + args.join(' ')
-  runner.run("nctl exec app #{ref.app_name} --project #{ref.project_full}#{extra}")
-when 'stats'
-  usage if args.empty?
-  ref = AppRef.new(args.shift, org_prefix)
-  runner.run("nctl get app #{ref.app_name} --project #{ref.project_full} -o stats")
-when 'config'
-  usage if args.empty?
-  ref = AppRef.new(args.shift, org_prefix)
-  runner.run("nctl get app #{ref.app_name} --project #{ref.project_full} -o yaml")
-when 'config:edit'
-  usage if args.empty?
-  ref = AppRef.new(args.shift, org_prefix)
-  runner.run("nctl edit app #{ref.app_name} --project #{ref.project_full}")
-when 'hosts'
-  usage if args.empty?
-  ref = AppRef.new(args.shift, org_prefix)
-  runner.run("nctl get app #{ref.app_name} --project #{ref.project_full} -o json | jq -r '.status.atProvider.hosts | map(.name) | .[]'")
-else
-  usage
-end
+action = COMMANDS[cmd]
+usage unless action
+action[:run].call(args, org_prefix, runner)
