@@ -18,11 +18,11 @@ end
 
 def usage(exit_code = 1)
   message = <<~USAGE
-    dapp (deplo.io app CLI)
+    deploio (deplo.io app CLI)
 
     Usage:
-      dapp [--org-prefix <prefix>] [--dry-run] [--help]
-      dapp <command> [args]
+      deploio [--org-prefix <prefix>] [--dry-run] [--help]
+      deploio <command> [args]
 
     Commands:
       new <project-env>                    Create project and app (git url inferred)
@@ -38,16 +38,16 @@ def usage(exit_code = 1)
       --org-prefix <prefix>                Default: renuo
       --dry-run                            Print commands without executing
       --help                               Show nctl help for a command. If a
-                                           command is provided (e.g. "dapp logs --help"),
+                                           command is provided (e.g. "deploio logs --help"),
                                            shows help for the underlying nctl
                                            command and bypasses other flags. If no
                                            command is provided, shows top-level
                                            nctl help.
 
     Examples:
-      dapp new fizzbuzz-main
-      dapp logs fizzbuzz-main
-      dapp exec fizzbuzz-main -- -c 'echo hi'
+      deploio new fizzbuzz-main
+      depl logs fizzbuzz-main
+      deploio exec fizzbuzz-main -- -c 'echo hi'
   USAGE
   puts message
   exit exit_code
@@ -123,7 +123,7 @@ COMMANDS = {
   'list' => {
     help: 'nctl get apps --help',
     run: ->(_args, org_prefix, runner) {
-      runner.run("nctl get apps -A -o json | jq -r '.[] | (.metadata.namespace + "-" + .metadata.name | gsub(\"#{org_prefix}-\"; \"\"))'")
+      runner.run(%Q(nctl get apps -A -o json | jq -r '.[] | (.metadata.namespace + "-" + .metadata.name | gsub("#{org_prefix}-"; ""))'))
     }
   },
   'logs' => {

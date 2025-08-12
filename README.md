@@ -1,6 +1,6 @@
-# deploio-cli (dapp)
+# deploio-cli (deploio / depl)
 
-A tiny single-file Ruby wrapper around `nctl` to make common app operations concise. “dapp” stands for deplo.io app CLI.
+A tiny single-file Ruby wrapper around `nctl` to make common app operations concise. The CLI is named `deploio` with shorthand `depl`.
 
 ## Install
 
@@ -16,10 +16,10 @@ export PATH="$HOME/.local/bin:$PATH"
 ## Usage
 
 ```sh
-dapp (deplo.io app CLI)
+deploio (deplo.io app CLI)
 
 Usage:
-  dapp <command> [args]
+  deploio <command> [args]
 
 Commands:
   new <project-env>                    Create project and app (git url inferred)
@@ -38,7 +38,7 @@ Global flags (before command):
 
 Examples:
 ```sh
-dapp new fizzbuzz-main
-dapp logs fizzbuzz-main
-dapp exec fizzbuzz-main -- -c 'echo hi'
+deploio new fizzbuzz-main
+depl logs fizzbuzz-main
+deploio exec fizzbuzz-main -- -c 'echo hi'
 ```

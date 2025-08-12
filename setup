@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-APP_NAME=${APP_NAME:-dapp}
+APP_NAME=${APP_NAME:-deploio}
 INSTALL_DIR=${INSTALL_DIR:-"${HOME}/.local/bin"}
 RAW_BASE=${RAW_BASE:-"https://raw.githubusercontent.com/CuddlyBunion341/deploio-cli/main"}
-DAPP_URL="${RAW_BASE}/dapp"
+CLI_URL="${RAW_BASE}/deploio"
 COLOR_RESET='\033[0m'
 COLOR_GREEN='\033[0;32m'
 COLOR_YELLOW='\033[0;33m'
@@ -31,14 +31,16 @@ main() {
   mkdir -p "$INSTALL_DIR"
   tmp_file="$(mktemp -t ${APP_NAME}.XXXXXX)"
   trap 'rm -f "$tmp_file"' EXIT
-  info "Downloading from: $DAPP_URL"
-  if ! fetch "$DAPP_URL" "$tmp_file"; then
-    err "Failed to download ${APP_NAME} from $DAPP_URL"
+  info "Downloading from: $CLI_URL"
+  if ! fetch "$CLI_URL" "$tmp_file"; then
+    err "Failed to download ${APP_NAME} from $CLI_URL"
     exit 1
   fi
   install_path="${INSTALL_DIR}/${APP_NAME}"
   mv "$tmp_file" "$install_path"
   chmod +x "$install_path"
+  # Create shorthand symlink 'depl'
+  (cd "$INSTALL_DIR" && ln -sf "$APP_NAME" depl)
   success "Installed ${APP_NAME} to ${install_path}"
   case ":${PATH}:" in
     *":${INSTALL_DIR}:"*) ;;

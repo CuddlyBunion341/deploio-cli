@@ -23,33 +23,33 @@ $ signifies placeholder
 
 pattern:
 
-[dapp command]
+[deploio command]
 [nctl command it aliases to]
 
 Let's go!
 
-dapp new fizzbuzz-main $
+deploio new fizzbuzz-main $
 nctl get projects | grep fizzbuzz # check if project exists
 nctl create project renuo-fizzbuzz # if it does not, create it!
 nctl create app main --project fizzbuzz --git-url:git@gituhb.com:renuo/fizzbuzz.git --git-revision="main" --size=mini $
 
-dapp logs fizzbuzz-main $
+deploio logs fizzbuzz-main $
 nctl logs app main --project renuo-fizzbuzz $
 
-dapp list
+deploio list
 deploio-cli nctl get apps -A -o json | jq -r '.[] | (.metadata.namespace + "-" + .metadata.name | gsub("renuo-"; ""))'
 
-dapp exec fizzbuzz-main $
+deploio exec fizzbuzz-main $
 nctl exec app main --project renuo-fizzbuzz $
 
-dapp stats fizzbuzz-main
+deploio stats fizzbuzz-main
 nctl get app main --project renuo-fizzbuzz -o stats
 
-dapp config fizzbuzz-main
+deploio config fizzbuzz-main
 nctl get app main --project renuo-fizzbuzz -o yaml
 
-dapp config:edit fizzbuzz-main
+deploio config:edit fizzbuzz-main
 nctl edit app main --project renuo-fizzbuzz
 
-dapp hosts fizzbuzz-main
+deploio hosts fizzbuzz-main
 nctl get app main --project renuo-fizzbuzz -o json | jq -r '.status.atProvider.hosts | map(.name) | .[]'
