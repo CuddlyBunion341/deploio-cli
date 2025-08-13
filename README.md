@@ -1,6 +1,6 @@
 # deploio-cli (deploio / depl)
 
-A tiny single-file Ruby wrapper around `nctl` to make common app operations concise. The CLI is named `deploio` with shorthand `depl`.
+A tiny single-file Ruby wrapper around [`nctl`](https://github.com/ninech/nctl) to make common app operations concise. The CLI is named `deploio` with shorthand `depl`.
 
 ## Install
 
