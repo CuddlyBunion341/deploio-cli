@@ -2,6 +2,11 @@
 
 A tiny single-file Ruby wrapper around [`nctl`](https://github.com/ninech/nctl) to make common app operations concise. The CLI is named `deploio` with shorthand `depl`.
 
+## Requirements
+
+- nctl version 1.11 or higher
+- bash
+
 ## Install
 
 ```zsh
