@@ -2,8 +2,28 @@
 
 require 'json'
 require 'open3'
+require 'did_you_mean'
 
 STDOUT.sync = true
+
+module SuggestionHelper
+  def self.suggest(input, dictionary)
+    return [] if dictionary.empty?
+    
+    spell_checker = DidYouMean::SpellChecker.new(dictionary: dictionary)
+    spell_checker.correct(input)
+  end
+  
+  def self.format_suggestions(input, dictionary, context_message = nil)
+    suggestions = suggest(input, dictionary)
+    return nil if suggestions.empty?
+    
+    message = context_message || "Did you mean?"
+    formatted = "\n#{message}"
+    suggestions.each { |suggestion| formatted += "\n  #{suggestion}" }
+    formatted
+  end
+end
 
 def extract_global_flags(argv, default_org_prefix: 'renuo')
   args = argv.dup
@@ -55,9 +75,17 @@ end
 
 class AppRef
   attr_reader :project_short, :environment, :org_prefix
-  def initialize(project_env, org_prefix)
+  def initialize(project_env, org_prefix, available_project_envs = [])
     parts = project_env.split('-')
-    raise "invalid <project-env>: #{project_env}" if parts.size < 2
+    if parts.size < 2
+      error_msg = "Invalid <project-env>: #{project_env}\n" +
+                  "Expected format: <project>-<environment> (e.g., 'myapp-staging', 'api-prod')"
+      
+      suggestions = SuggestionHelper.format_suggestions(project_env, available_project_envs)
+      error_msg += suggestions if suggestions
+      
+      raise error_msg
+    end
     @environment = parts.pop
     @project_short = parts.join('-')
     @org_prefix = org_prefix
@@ -94,12 +122,57 @@ def nctl_app_cmd(action, ref)
   "nctl #{action} app #{ref.app_name} --project #{ref.project_full}"
 end
 
+def fetch_available_project_envs(org_prefix, runner)
+  return @cached_project_envs if defined?(@cached_project_envs)
+
+  stdout, _stderr, code = runner.capture(%Q(nctl get apps -A -o json | jq -r '.[] | (.metadata.namespace + "-" + .metadata.name | gsub("#{org_prefix}-"; ""))'))
+  
+  if code == 0 && !stdout.strip.empty?
+    @cached_project_envs = stdout.strip.split("\n").reject(&:empty?)
+  else
+    # For testing purposes, provide some mock data in dry-run mode
+    if runner.instance_variable_get(:@dry_run)
+      @cached_project_envs = ["myapp-staging", "myapp-production", "api-staging", "fizzbuzz-main", "shapehub-develop"]
+    else
+      @cached_project_envs = []
+    end
+  end
+  
+  @cached_project_envs
+rescue
+  @cached_project_envs = []
+end
+
+def validate_project_env_with_suggestions(project_env, org_prefix, runner, command_name, extra_args = [])
+  available_project_envs = fetch_available_project_envs(org_prefix, runner)
+  
+  return true if available_project_envs.include?(project_env)
+  return true if available_project_envs.empty?
+  
+  puts "Project-environment '#{project_env}' not found."
+  
+  suggestions = SuggestionHelper.suggest(project_env, available_project_envs)
+  unless suggestions.empty?
+    puts "\nDid you mean?"
+    suggestions.each do |suggestion|
+      full_command = "#{command_name} #{suggestion}"
+      full_command += " #{extra_args.join(' ')}" unless extra_args.empty?
+      puts "  #{full_command}"
+    end
+  end
+  
+  puts "\nRun 'deploio list' to see all available project-environments."
+  false
+end
+
 COMMANDS = {
   'new' => {
     help: 'nctl create app --help',
     run: ->(args, org_prefix, runner) {
       raise 'missing <project-env>' if args.empty?
-      ref = AppRef.new(args.shift, org_prefix)
+      project_env = args.shift
+      available_project_envs = fetch_available_project_envs(org_prefix, runner)
+      ref = AppRef.new(project_env, org_prefix, available_project_envs)
       stdout, _stderr, _code = runner.capture("nctl get projects -o json")
       existing = []
       begin
@@ -130,7 +203,9 @@ COMMANDS = {
     help: 'nctl logs app --help',
     run: ->(args, org_prefix, runner) {
       raise 'missing <project-env>' if args.empty?
-      ref = AppRef.new(args.shift, org_prefix)
+      project_env = args.shift
+      exit 1 unless validate_project_env_with_suggestions(project_env, org_prefix, runner, 'logs', args)
+      ref = AppRef.new(project_env, org_prefix)
       extra = args.empty? ? '' : ' ' + args.join(' ')
       runner.run(nctl_app_cmd('logs', ref) + extra)
     }
@@ -139,7 +214,9 @@ COMMANDS = {
     help: 'nctl exec app --help',
     run: ->(args, org_prefix, runner) {
       raise 'missing <project-env>' if args.empty?
-      ref = AppRef.new(args.shift, org_prefix)
+      project_env = args.shift
+      exit 1 unless validate_project_env_with_suggestions(project_env, org_prefix, runner, 'exec', args)
+      ref = AppRef.new(project_env, org_prefix)
       extra = args.empty? ? '' : ' ' + args.join(' ')
       runner.run(nctl_app_cmd('exec', ref) + extra)
     }
@@ -148,7 +225,9 @@ COMMANDS = {
     help: 'nctl get app --help',
     run: ->(args, org_prefix, runner) {
       raise 'missing <project-env>' if args.empty?
-      ref = AppRef.new(args.shift, org_prefix)
+      project_env = args.shift
+      exit 1 unless validate_project_env_with_suggestions(project_env, org_prefix, runner, 'stats', args)
+      ref = AppRef.new(project_env, org_prefix)
       runner.run(nctl_app_cmd('get', ref) + ' -o stats')
     }
   },
@@ -156,7 +235,9 @@ COMMANDS = {
     help: 'nctl get app --help',
     run: ->(args, org_prefix, runner) {
       raise 'missing <project-env>' if args.empty?
-      ref = AppRef.new(args.shift, org_prefix)
+      project_env = args.shift
+      exit 1 unless validate_project_env_with_suggestions(project_env, org_prefix, runner, 'config', args)
+      ref = AppRef.new(project_env, org_prefix)
       runner.run(nctl_app_cmd('get', ref) + ' -o yaml')
     }
   },
@@ -164,7 +245,9 @@ COMMANDS = {
     help: 'nctl edit app --help',
     run: ->(args, org_prefix, runner) {
       raise 'missing <project-env>' if args.empty?
-      ref = AppRef.new(args.shift, org_prefix)
+      project_env = args.shift
+      exit 1 unless validate_project_env_with_suggestions(project_env, org_prefix, runner, 'config:edit', args)
+      ref = AppRef.new(project_env, org_prefix)
       runner.run(nctl_app_cmd('edit', ref))
     }
   },
@@ -172,7 +255,9 @@ COMMANDS = {
     help: 'nctl get app --help',
     run: ->(args, org_prefix, runner) {
       raise 'missing <project-env>' if args.empty?
-      ref = AppRef.new(args.shift, org_prefix)
+      project_env = args.shift
+      exit 1 unless validate_project_env_with_suggestions(project_env, org_prefix, runner, 'hosts', args)
+      ref = AppRef.new(project_env, org_prefix)
       runner.run(nctl_app_cmd('get', ref) + " -o json | jq -r '.status.atProvider.hosts | map(.name) | .[]'")
     }
   }
@@ -204,5 +289,16 @@ usage if args.empty?
 cmd = args.shift
 runner = Runner.new(dry_run: dry_run)
 action = COMMANDS[cmd]
-usage unless action
+
+unless action
+  puts "Unknown command: #{cmd}"
+  
+  suggestions = SuggestionHelper.format_suggestions(cmd, COMMANDS.keys)
+  puts suggestions if suggestions
+  
+  puts "\nRun 'deploio --help' to see available commands."
+  exit 1
+end
+
 action[:run].call(args, org_prefix, runner)
+
