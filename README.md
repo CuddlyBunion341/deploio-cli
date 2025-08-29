@@ -4,7 +4,7 @@ A tiny single-file Ruby wrapper around [`nctl`](https://github.com/ninech/nctl) 
 
 ## Requirements
 
-- nctl version 1.11 or higher
+- nctl version 1.10.0 or higher (with JSON output support)
 - bash
 
 ## Install

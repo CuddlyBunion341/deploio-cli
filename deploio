@@ -7,6 +7,49 @@ require 'did_you_mean'
 
 $stdout.sync = true
 
+def check_requirements
+  check_nctl_version
+  check_nctl_json_support
+end
+
+def check_nctl_version
+  stdout, _stderr, status = Open3.capture3('nctl --version')
+
+  unless status.success?
+    puts 'Error: nctl not found or not working properly'
+    puts 'Please install nctl first: https://github.com/ninech/nctl'
+    exit 1
+  end
+
+  version_output = stdout.strip
+  version_match = version_output.match(/(\d+\.\d+\.\d+)/)
+
+  unless version_match
+    puts "Warning: Could not parse nctl version from: #{version_output}"
+    return
+  end
+
+  version = version_match[1]
+  required_version = '1.10.0'
+
+  return unless Gem::Version.new(version) < Gem::Version.new(required_version)
+
+  puts "Error: nctl version #{version} does not meet requirements (need at least #{required_version})"
+  puts 'Please update nctl via homebrew:'
+  puts '  brew upgrade nctl'
+  exit 1
+end
+
+def check_nctl_json_support
+  stdout, _stderr, _status = Open3.capture3('nctl get apps --help')
+
+  return if stdout.include?('-o, --output') || stdout.include?('--output') || stdout.include?('json')
+
+  puts 'Warning: nctl may not support JSON output format'
+  puts "This could cause issues with the 'list' command"
+  nil
+end
+
 module SuggestionHelper
   def self.suggest(input, dictionary)
     return [] if dictionary.empty?
@@ -299,6 +342,8 @@ if ARGV.include?('--help')
 end
 
 args, org_prefix, dry_run = extract_global_flags(ARGV)
+
+check_requirements unless dry_run
 
 usage if args.empty?
 
