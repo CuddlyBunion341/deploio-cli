@@ -1,0 +1,66 @@
+#compdef deploio depl
+
+_deploio() {
+  local context state line
+  typeset -A opt_args
+
+  local -a commands
+  commands=(
+    'new:Create project and app (git url inferred)'
+    'list:List apps as <project>-<env>'
+    'logs:Stream logs for app'
+    'exec:Exec into app (args passed to nctl)'
+    'stats:Show app stats'
+    'config:Show app config (yaml)'
+    'config:edit:Edit app config'
+    'hosts:Print app hosts'
+  )
+
+  local -a global_flags
+  global_flags=(
+    '--org-prefix[Organization prefix (default: renuo)]:prefix:'
+    '--dry-run[Print commands without executing]'
+    '--help[Show help]'
+  )
+
+  _arguments -C \
+    $global_flags \
+    '1: :->command' \
+    '*: :->args' \
+    && return 0
+
+  case $state in
+    command)
+      _describe -t commands 'deploio commands' commands
+      ;;
+    args)
+      case $words[1] in
+        new|logs|exec|stats|config|config:edit|hosts)
+          _deploio_project_envs
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_deploio_project_envs() {
+  local -a project_envs
+  local deploio_cmd=${words[1]%/*}
+  
+  # Use the same command name that was invoked (deploio or depl)
+  if [[ -n $deploio_cmd ]] && command -v $deploio_cmd >/dev/null 2>&1; then
+    # Try to get project environments, but don't fail if it doesn't work
+    project_envs=(${(f)"$($deploio_cmd --dry-run list 2>/dev/null | grep -v '^>' | grep -E '^[a-zA-Z0-9_-]+-[a-zA-Z0-9_-]+$')"})
+    
+    if [[ ${#project_envs[@]} -gt 0 ]]; then
+      _describe -t project-envs 'project environments' project_envs
+    else
+      # Fallback to simple completion
+      _message 'project-env (format: project-environment)'
+    fi
+  else
+    _message 'project-env (format: project-environment)'
+  fi
+}
+
+_deploio "$@"

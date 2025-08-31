@@ -5,6 +5,7 @@ INSTALL_DIR=${INSTALL_DIR:-"${HOME}/.local/bin"}
 RAW_BASE=${RAW_BASE:-"https://raw.githubusercontent.com/CuddlyBunion341/deploio-cli/main"}
 CLI_URL="${RAW_BASE}/deploio"
 MAN_URL="${RAW_BASE}/deploio.1"
+COMPLETION_URL="${RAW_BASE}/_deploio"
 COLOR_RESET='\033[0m'
 COLOR_GREEN='\033[0;32m'
 COLOR_YELLOW='\033[0;33m'
@@ -32,7 +33,8 @@ main() {
   mkdir -p "$INSTALL_DIR"
   tmp_file="$(mktemp -t ${APP_NAME}.XXXXXX)"
   tmp_man="$(mktemp -t ${APP_NAME}-man.XXXXXX)"
-  trap 'rm -f "$tmp_file" "$tmp_man"' EXIT
+  tmp_completion="$(mktemp -t ${APP_NAME}-completion.XXXXXX)"
+  trap 'rm -f "$tmp_file" "$tmp_man" "$tmp_completion"' EXIT
   
   info "Downloading CLI from: $CLI_URL"
   if ! fetch "$CLI_URL" "$tmp_file"; then
@@ -45,6 +47,11 @@ main() {
     warn "Failed to download man page from $MAN_URL (continuing without man page)"
   fi
   
+  info "Downloading zsh completion from: $COMPLETION_URL"
+  if ! fetch "$COMPLETION_URL" "$tmp_completion"; then
+    warn "Failed to download completion script from $COMPLETION_URL (continuing without completions)"
+  fi
+  
   install_path="${INSTALL_DIR}/${APP_NAME}"
   mv "$tmp_file" "$install_path"
   chmod +x "$install_path"
@@ -55,6 +62,14 @@ main() {
     mkdir -p "$man_dir"
     mv "$tmp_man" "${man_dir}/${APP_NAME}.1"
     success "Installed man page to ${man_dir}/${APP_NAME}.1"
+  fi
+  
+  # Install zsh completion if download succeeded
+  if [[ -s "$tmp_completion" ]]; then
+    completion_dir="${HOME}/.local/share/zsh/site-functions"
+    mkdir -p "$completion_dir"
+    mv "$tmp_completion" "${completion_dir}/_${APP_NAME}"
+    success "Installed zsh completion to ${completion_dir}/_${APP_NAME}"
   fi
   
   # Create shorthand symlink 'depl'
@@ -80,6 +95,17 @@ main() {
     echo ""
     echo "  export MANPATH=\"${man_dir}:\$MANPATH\""
     echo ""
+  fi
+  
+  # Check if completion directory is in fpath
+  completion_dir="${HOME}/.local/share/zsh/site-functions"
+  if [[ -f "${completion_dir}/_${APP_NAME}" ]]; then
+    echo "Zsh completion installed. To enable it, add this to your ~/.zshrc:"
+    echo ""
+    echo "  fpath=(\"${completion_dir}\" \$fpath)"
+    echo "  autoload -Uz compinit && compinit"
+    echo ""
+    echo "Then restart your shell or run: source ~/.zshrc"
   fi
   echo ""
   info "Test the installation:"
