@@ -4,6 +4,7 @@ APP_NAME=${APP_NAME:-deploio}
 INSTALL_DIR=${INSTALL_DIR:-"${HOME}/.local/bin"}
 RAW_BASE=${RAW_BASE:-"https://raw.githubusercontent.com/CuddlyBunion341/deploio-cli/main"}
 CLI_URL="${RAW_BASE}/deploio"
+MAN_URL="${RAW_BASE}/deploio.1"
 COLOR_RESET='\033[0m'
 COLOR_GREEN='\033[0;32m'
 COLOR_YELLOW='\033[0;33m'
@@ -30,15 +31,32 @@ main() {
   info "Installing ${APP_NAME} (deplo.io app CLI)"
   mkdir -p "$INSTALL_DIR"
   tmp_file="$(mktemp -t ${APP_NAME}.XXXXXX)"
-  trap 'rm -f "$tmp_file"' EXIT
-  info "Downloading from: $CLI_URL"
+  tmp_man="$(mktemp -t ${APP_NAME}-man.XXXXXX)"
+  trap 'rm -f "$tmp_file" "$tmp_man"' EXIT
+  
+  info "Downloading CLI from: $CLI_URL"
   if ! fetch "$CLI_URL" "$tmp_file"; then
     err "Failed to download ${APP_NAME} from $CLI_URL"
     exit 1
   fi
+  
+  info "Downloading man page from: $MAN_URL"
+  if ! fetch "$MAN_URL" "$tmp_man"; then
+    warn "Failed to download man page from $MAN_URL (continuing without man page)"
+  fi
+  
   install_path="${INSTALL_DIR}/${APP_NAME}"
   mv "$tmp_file" "$install_path"
   chmod +x "$install_path"
+  
+  # Install man page if download succeeded
+  if [[ -s "$tmp_man" ]]; then
+    man_dir="${HOME}/.local/share/man/man1"
+    mkdir -p "$man_dir"
+    mv "$tmp_man" "${man_dir}/${APP_NAME}.1"
+    success "Installed man page to ${man_dir}/${APP_NAME}.1"
+  fi
+  
   # Create shorthand symlink 'depl'
   (cd "$INSTALL_DIR" && ln -sf "$APP_NAME" depl)
   success "Installed ${APP_NAME} to ${install_path}"
@@ -53,8 +71,19 @@ main() {
       echo "  source ~/.zshrc"
       ;;
   esac
+  
+  # Check if man page directory is in MANPATH
+  man_dir="${HOME}/.local/share/man"
+  if [[ -f "${man_dir}/man1/${APP_NAME}.1" ]] && [[ ":${MANPATH}:" != *":${man_dir}:"* ]]; then
+    warn "Man page installed but ${man_dir} is not in MANPATH."
+    echo "Add this to your ~/.zshrc to access man pages:"
+    echo ""
+    echo "  export MANPATH=\"${man_dir}:\$MANPATH\""
+    echo ""
+  fi
   echo ""
   info "Test the installation:"
   echo "  ${APP_NAME} --dry-run list"
+  echo "  man ${APP_NAME}"
 }
 main "$@"

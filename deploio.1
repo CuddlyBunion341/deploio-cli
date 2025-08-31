@@ -1,0 +1,148 @@
+.TH DEPLOIO 1 "2024" "deploio-cli" "User Commands"
+.SH NAME
+deploio \- deplo.io app CLI wrapper around nctl
+.SH SYNOPSIS
+.B deploio
+[\fB\-\-org\-prefix\fR \fIPREFIX\fR] [\fB\-\-dry\-run\fR] [\fB\-\-help\fR]
+.br
+.B deploio
+\fICOMMAND\fR [\fIARGS\fR]
+.br
+.B depl
+\fICOMMAND\fR [\fIARGS\fR]
+.SH DESCRIPTION
+.B deploio
+is a single-file Ruby wrapper around
+.BR nctl (1)
+that provides a simplified interface for common deplo.io app operations.
+It automatically infers Git URLs, validates project environments, and provides
+helpful suggestions for typos.
+.PP
+The tool can be invoked as either
+.B deploio
+or its shorthand alias
+.BR depl .
+.SH OPTIONS
+.PP
+Global flags must appear before the command:
+.TP
+.BR \-\-org\-prefix " " \fIPREFIX\fR
+Set organization prefix for project names (default: renuo)
+.TP
+.B \-\-dry\-run
+Print commands without executing them
+.TP
+.B \-\-help
+Show help. If a command is provided, shows help for the underlying nctl command.
+If no command is provided, shows top-level help.
+.SH COMMANDS
+.TP
+.BR "new " \fIPROJECT\-ENV\fR
+Create project and app. Git URL is automatically inferred from the project name.
+Creates the project if it doesn't exist.
+.TP
+.B list
+List all apps in the format <project>-<env>
+.TP
+.BR "logs " \fIPROJECT\-ENV\fR " [" \fB\-\-\fR " " \fIARGS\fR "]"
+Stream logs for the specified app. Additional arguments are passed to nctl.
+.TP
+.BR "exec " \fIPROJECT\-ENV\fR " [" \fB\-\-\fR " " \fIARGS\fR "]"
+Execute commands in the app container. Arguments after \-\- are passed to nctl exec.
+.TP
+.BR "stats " \fIPROJECT\-ENV\fR
+Show app statistics
+.TP
+.BR "config " \fIPROJECT\-ENV\fR
+Show app configuration in YAML format
+.TP
+.BR "config:edit " \fIPROJECT\-ENV\fR
+Edit app configuration interactively
+.TP
+.BR "hosts " \fIPROJECT\-ENV\fR
+Print app hostnames
+.SH PROJECT-ENV FORMAT
+.PP
+The \fIPROJECT\-ENV\fR parameter follows the format \fIproject\fR\-\fIenvironment\fR,
+where:
+.TP
+.I project
+Short project name (will be prefixed with org-prefix)
+.TP
+.I environment
+Environment name (e.g., staging, production, main, develop)
+.PP
+Examples: \fBmyapp\-staging\fR, \fBapi\-prod\fR, \fBfizzbuzz\-main\fR
+.SH EXAMPLES
+.TP
+Create a new app:
+.B deploio new fizzbuzz\-main
+.TP
+List all apps:
+.B depl list
+.TP
+Stream logs:
+.B deploio logs fizzbuzz\-main
+.TP
+Execute a command in the app:
+.B deploio exec fizzbuzz\-main \-\- \-c 'echo hi'
+.TP
+Show app stats:
+.B depl stats myapp\-production
+.TP
+Edit configuration:
+.B deploio config:edit api\-staging
+.TP
+Use custom org prefix:
+.B deploio \-\-org\-prefix myorg new project\-dev
+.TP
+Dry run mode:
+.B deploio \-\-dry\-run logs fizzbuzz\-main
+.SH REQUIREMENTS
+.TP
+.B nctl
+Version 1.10.0 or higher with JSON output support
+.TP
+.B Ruby
+With stdlib and did_you_mean gem
+.TP
+.B jq
+For JSON processing (used by list and hosts commands)
+.SH FEATURES
+.TP
+.B Smart Validation
+Validates that project-env exists before running commands
+.TP
+.B Typo Suggestions
+Provides suggestions for mistyped commands and project names using did_you_mean
+.TP
+.B Git URL Inference
+Automatically constructs GitHub URLs from project names
+.TP
+.B Auto Project Creation
+Creates projects if they don't exist when using the 'new' command
+.TP
+.B Contextual Help
+Run any command with \-\-help to see nctl-specific help
+.SH FILES
+.TP
+.I ~/.local/bin/deploio
+Main executable
+.TP
+.I ~/.local/bin/depl
+Shorthand symlink to deploio
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error (invalid arguments, command failed, requirements not met)
+.SH SEE ALSO
+.BR nctl (1),
+.BR jq (1)
+.PP
+Project repository: https://github.com/CuddlyBunion341/deploio-cli
+.SH AUTHOR
+Written for deplo.io app management.
+
